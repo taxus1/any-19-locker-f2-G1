@@ -16,15 +16,34 @@ func New(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.OperatorAuth())
 
-	svc := service.NewItem(repository.NewItem(db), rdb)
-	h := handler.NewItem(svc)
+	// Item 模块
+	itemSvc := service.NewItem(repository.NewItem(db), rdb)
+	itemH := handler.NewItem(itemSvc)
 
+	// Locker 模块
+	lockerCellRepo := repository.NewLockerCellRepository(db)
+	lockerParcelRepo := repository.NewLockerParcelRepository(db)
+	lockerSvc := service.NewLockerService(lockerCellRepo, lockerParcelRepo, rdb)
+	lockerH := handler.NewLockerHandler(lockerSvc)
+
+	// Demo API
 	api := r.Group("/api/demo")
 	{
-		api.GET("/ping", h.Ping)
-		api.POST("/item", h.CreateItem)
-		api.GET("/list", h.List)
-		api.GET("/cache", h.Cache)
+		api.GET("/ping", itemH.Ping)
+		api.POST("/item", itemH.CreateItem)
+		api.GET("/list", itemH.List)
+		api.GET("/cache", itemH.Cache)
 	}
+
+	// Locker API
+	locker := r.Group("/api/locker")
+	{
+		locker.POST("/cell", lockerH.RegisterCell)
+		locker.POST("/cell/disable", lockerH.DisableCell)
+		locker.POST("/parcel", lockerH.StoreParcel)
+		locker.POST("/parcel/pickup", lockerH.PickUpParcel)
+		locker.GET("/parcel/list", lockerH.ListParcelsByPhone)
+	}
+
 	return r
 }

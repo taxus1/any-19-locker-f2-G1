@@ -16,15 +16,40 @@ func New(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.OperatorAuth())
 
+	// 初始化快递柜相关组件
+	lockerRepo := repository.NewLockerRepository(db)
+	lockerSvc := service.NewLockerService(lockerRepo)
+	lockerH := handler.NewLockerHandler(lockerSvc)
+
+	// 初始化 demo 相关组件
 	svc := service.NewItem(repository.NewItem(db), rdb)
 	h := handler.NewItem(svc)
 
-	api := r.Group("/api/demo")
+	api := r.Group("/api")
 	{
-		api.GET("/ping", h.Ping)
-		api.POST("/item", h.CreateItem)
-		api.GET("/list", h.List)
-		api.GET("/cache", h.Cache)
+		// demo 接口
+		demo := api.Group("/demo")
+		{
+			demo.GET("/ping", h.Ping)
+			demo.POST("/item", h.CreateItem)
+			demo.GET("/list", h.List)
+			demo.GET("/cache", h.Cache)
+		}
+
+		// 快递柜接口
+		locker := api.Group("/locker")
+		{
+			// 格口管理
+			locker.POST("/cell", lockerH.RegisterCell)
+			locker.POST("/cell/disable", lockerH.DisableCell)
+
+			// 包裹存取
+			locker.POST("/parcel", lockerH.StoreParcel)
+			locker.POST("/parcel/pickup", lockerH.PickupParcel)
+
+			// 查询在柜包裹
+			locker.GET("/parcel/list", lockerH.ListParcelsByPhone)
+		}
 	}
 	return r
 }
